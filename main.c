@@ -142,7 +142,7 @@ void NFS_Command_Patched(char* param_1,int param_2,int param_3,int param_4, char
   NFS_Command(param_1, param_2, param_3, param_4, param_5, param_6, param_7, param_8, param_9, param_10, param_11, param_12, param_13);
   
   //Example Code:
-  //NFS_Command("CloseMessageBox", 0, 0, 9, param_5, param_6, param_7, param_8); // Close Message Box
+  //NFS_Command("DisplayMessageBox", 0, 0, 9, "You Pressed Square!", "Welcome to CheatDeviceOwnTheCity!", 0, 0, 0, 0, 0, 0, 0); // Close Message Box
   
 }
 
