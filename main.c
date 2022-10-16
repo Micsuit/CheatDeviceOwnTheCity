@@ -14,6 +14,7 @@ Things To Do:
 #include <string.h>
 #include <stdlib.h>
 
+
 #define PLG_VER 0.1 // Plugin Version
 #define EMULATOR_DEVCTL__IS_EMULATOR 0x00000003
 
@@ -51,18 +52,22 @@ Things To Do:
 }
 //////////////////////////////////////////////////////////////////////////////
 
-const char *logfile = "ms0:/log.txt"; // Used for Log
+char *logfile = ""; // Used for Log
 static STMOD_HANDLER previous;
 SceCtrlData pad;
 u32 mod_text_addr;
 u32 mod_text_size;
 u32 mod_data_size;
 int hold_n = 0;
+int SHOW_CHEAT = 0;
+int SHOW_CHEAT_1 = 0;
+int CURR_BUTTONS;
+int OLD_BUTTONS;
 
 register int gp asm("gp");
 
-void (* NFS_Command)(char* param_1,int param_2,int param_3,int param_4, char* param_5, char* param_6, u32 param_7,u32 param_8);
-void NFS_Command_Patched(char* param_1,int param_2,int param_3,int param_4, char* param_5, char* param_6, u32 param_7,u32 param_8);
+void (* NFS_Command)(char* param_1,int param_2,int param_3,int param_4, char* param_5, char* param_6, u32 param_7,u32 param_8, u32 param_9, u32 param_10, u32 param_11, u32 param_12, u32 param_13);
+void NFS_Command_Patched(char* param_1,int param_2,int param_3,int param_4, char* param_5, char* param_6, u32 param_7,u32 param_8, u32 param_9, u32 param_10, u32 param_11, u32 param_12, u32 param_13);
 
 void (* NFS_Print)(int param_1, char* param_2);
 void NFS_Print_Patched(int param_1, char* param_2);
@@ -100,17 +105,45 @@ SceInt64 sceKernelGetSystemTimeWidePatched(void) { // Game Loop
     frames = 0;
   } frames++;
 
-  return cur_micros;
+  sceCtrlPeekBufferPositive(&pad, 1);
+  if (pad.Buttons != 0) {
+    OLD_BUTTONS = CURR_BUTTONS;
+    CURR_BUTTONS = pad.Buttons;
+    if ((pad.Buttons & PSP_CTRL_SQUARE) && CURR_BUTTONS != OLD_BUTTONS) { // Pressed Square
+      if (SHOW_CHEAT == 0) SHOW_CHEAT = 1;
+      else SHOW_CHEAT = 0;
+    }
+  } else {
+    OLD_BUTTONS = 0;
+    CURR_BUTTONS = 0;
+  }
+
+  if (SHOW_CHEAT == 1) {
+    if (SHOW_CHEAT_1 == 0) {
+      NFS_Command_Patched("DisplayMessageBox", 0, 0, 9, "You Pressed Square!", "Welcome to CheatDeviceOwnTheCity!", 0, 0, 0, 0, 0, 0, 0); // To Display Message Box with text, only works on menu
+      SHOW_CHEAT_1 = 1;
+    }
+  }
+
+  else {
+    if (SHOW_CHEAT_1 == 1) {
+      NFS_Command_Patched("CloseMessageBox", 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0); // To Display Message Box with text
+      SHOW_CHEAT_1 = 0;
+      SHOW_CHEAT = 0;
+    }
+  }
+
+
+
+  return NULL;
 }
 
-void NFS_Command_Patched(char* param_1,int param_2,int param_3,int param_4, char* param_5, char* param_6, u32 param_7,u32 param_8) { // Can use "DisplayMessageBox" and "CloseMessageBox" for param_1, param_5: title, param_6: text, still to discover the rest
-  NFS_Command(param_1, param_2, param_3, param_4, param_5, param_6, param_7, param_8);
-  /*
-  Example Code:
+void NFS_Command_Patched(char* param_1,int param_2,int param_3,int param_4, char* param_5, char* param_6, u32 param_7,u32 param_8, u32 param_9, u32 param_10, u32 param_11, u32 param_12, u32 param_13) { // Can use "DisplayMessageBox" and "CloseMessageBox" for param_1, param_5: title, param_6: text, still to discover the rest
+  NFS_Command(param_1, param_2, param_3, param_4, param_5, param_6, param_7, param_8, param_9, param_10, param_11, param_12, param_13);
   
-  NFS_Command("DisplayMessageBox", 0, 0, 9, "Title", "Some Text", param_7, param_8); // To Display Message Box with text
-  NFS_Command("CloseMessageBox", 0, 0, 9, param_5, param_6, param_7, param_8); // Close Message Box
-  */
+  //Example Code:
+  //NFS_Command("CloseMessageBox", 0, 0, 9, param_5, param_6, param_7, param_8); // Close Message Box
+  
 }
 
 void NFS_Print_Patched(int param_1, char* param_2) { // Print Custom Message, still to discover param_1
@@ -137,21 +170,23 @@ void PatchNFSC(u32 text_addr) {
 }
 
 int patch(u32 text_addr) {
-	if (strcmp((char *)(text_addr + 0x0039043C), "nfsGame") == 0) { // NFSC OTC ULUS10114 v1.00 (US)
-		logPrintf("Found Need For Speed Own The City, 'nfsGame' > 0x%08X", text_addr + 0x0039043C);
-		PatchNFSC(text_addr);
+  if (strcmp((char *)(text_addr + 0x0039043C), "nfsGame") == 0) { // NFSC OTC ULUS10114 v1.00 (US)
+    logPrintf("Found Need For Speed Own The City, 'nfsGame' > 0x%08X", text_addr + 0x0039043C);
+    PatchNFSC(text_addr);
   }
-	return 0;
+  return 0;
 }
 
 
 static void CheckModules() { // PPSSPP
+  logfile = "ms0:/PSP/PLUGINS/CheatDeviceOwnTheCity/log.txt";
+  sceIoRemove(logfile); // Log Things...
   SceUID modules[10];
   int count = 0;
   if (sceKernelGetModuleIdList(modules, sizeof(modules), &count) >= 0) {
     int i;
     SceKernelModuleInfo info;
-    for (i = 0; i < count; ++i) {
+     for (i = 0; i < count; ++i) {
       info.size = sizeof(SceKernelModuleInfo);
       if (sceKernelQueryModuleInfo(modules[i], &info) < 0)
         continue;
@@ -176,7 +211,9 @@ static void CheckModules() { // PPSSPP
   }
 }
 
-int OnModuleStart(SceModule2 *mod) {
+int OnModuleStart(SceModule2 *mod) { // PSP
+  logfile = "ms0:/seplugins/log.txt";
+  sceIoRemove(logfile); // Log Things...
   char *modname = mod->modname;
   logPrintf("Modname: %s", modname);
   if(strcmp(modname, "nfsGame") == 0 ) {
@@ -198,9 +235,6 @@ int OnModuleStart(SceModule2 *mod) {
 
 
 int module_start(SceSize argc, void* argp) {
-  
-	sceIoRemove(logfile); // Log Things...
-	
 	if(sceIoDevctl("kemulator:", EMULATOR_DEVCTL__IS_EMULATOR, NULL, 0, NULL, 0) == 0) // PPSSPP
 		CheckModules(); // Scan the modules using normal/official syscalls.
 
