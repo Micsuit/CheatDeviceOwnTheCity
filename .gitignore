@@ -1,5 +1,7 @@
 # Prerequisites
 *.d
+*.vscode
+log.txt
 
 # Object files
 *.o
@@ -35,7 +37,6 @@
 *.i*86
 *.x86_64
 *.hex
-*.prx
 *.elf
 
 # Debug files
@@ -52,3 +53,4 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+.gitignore

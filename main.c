@@ -1,14 +1,9 @@
 /*
-Cheat Device Own The City 0.11, Made by MicSuit
+Cheat Device Own The City 0.12, Made by MicSuit
 ONLY WORKS ON NFSC OTC US v1.00!!!
 Things To Do:
   - Make the cheats
   - Improve the Explorer
-
-Useful Functions:
-  NFS_Command("OpenScreen",0,"/_root",1,"CrewHouse", 0,0,0,0,0,0,0,0); // Opens Crew House
-  NFS_Command("OpenScreen",0,"/_root",1,"BootPSA", 0,0,0,0,0,0,0,0); // Opens Public Service Annoucement Screen
-  NFS_Command("OpenScreen",0,"/_root",1,"MainMenu", 0,0,0,0,0,0,0,0); // Opens NFS's Main Menu
 */
 
 #include <pspkernel.h>
@@ -19,7 +14,7 @@ Useful Functions:
 #include <stdlib.h>
 
 
-#define PLG_VER 0.11 // Plugin Version
+#define PLG_VER 0.12 // Plugin Version
 #define EMULATOR_DEVCTL__IS_EMULATOR 0x00000003
 
 ////////////////////////////////////////////////////////////////////////////
@@ -56,7 +51,8 @@ Useful Functions:
 }
 //////////////////////////////////////////////////////////////////////////////
 
-char *logfile = ""; // Used for Log
+char *logfile = "ms0:/CDOTC/log.txt"; // Used for Log
+char *savefile = "ms0:/CDOTC/cdotc_sett.ini";
 static STMOD_HANDLER previous;
 SceCtrlData pad;
 u32 mod_text_addr;
@@ -76,10 +72,16 @@ void NFS_Command_Patched(char* command,int param_2,char* param_3,int param_4, ch
 void (* NFS_Print)(int param_1, char* param_2);
 void NFS_Print_Patched(int param_1, char* param_2);
 
-void (* NFS_Print2)(int param_1, char* param_2, char* param_3);
-void NFS_Print2_Patched(int param_1, char* param_2, char* param_3);
+void (* NFS_Print3)(char* string);
+void NFS_Print3_Patched(char* string);
 
-PSP_MODULE_INFO("cheatdevice_otc", 0, 0, 1);
+void (*GetGameLanguageID)(int LanguageNumber);
+void GetGameLanguageIDPatched(int LanguageNumber);
+
+void(* LoadLanguage)(int *param_1, int LanguageID);
+void LoadLanguagePatched(int *param_1, int LanguageID);
+
+PSP_MODULE_INFO("CheatDeviceOwnTheCity", 0, 0, 1);
 
 int logPrintf(const char *text, ...) { // Log Things...
   va_list list;
@@ -101,13 +103,22 @@ int logPrintf(const char *text, ...) { // Log Things...
 
 //SceInt64 cur_micros = 0, delta_micros = 0, last_micros = 0;
 //u32 frames = 0; float fps = 0.0f;
+
 char MAIN_TITLE[64];
-char MAIN_CHEATS_STRINGS[6][128] = {"Unlimited Nitrous - ", "Car Acceleration - ", "Car Steering - ", "Freeze Opponents - ", "Unlimited Crew Power - ", "Teleport Somewhere - "};
+char MAIN_CHEATS_STRINGS[7][32] = {"Unlimited Nitrous - ", "Car Acceleration - ", "Car Steering - ", "Freeze Opponents - ", "Unlimited Crew Power - ", "Go to Screen - ", "Set Game Language to: "};
 int CHEAT_LENGTH = sizeof(MAIN_CHEATS_STRINGS)/sizeof(MAIN_CHEATS_STRINGS[0]);    
-int MAIN_CHEATS_BOOLS[] = {0, 2, 2, 0, 0, 0};
-int MAIN_CHEATS_VALUES[] = {-1, 1, 1, -1, -1, -1};
+int MAIN_CHEATS_BOOLS[] = {0, 2, 2, 0, 0, 2, 2};
+int MAIN_CHEATS_VALUES[] = {-1, 1, 1, -1, -1, 1, 1};
+char MAIN_CHEAT_SCREEN[6][29] = {"Main Menu", "Crew House", "Public Service Annoucement", "Boot Title Screen", "Infrastucture Menu", "Adhoc Menu"};
+char MAIN_CHEAT_SCREEN_INTERNAL[6][17] = {"MainMenu", "CrewHouse", "BootPSA", "BootTitle", "INTERNETMAINMENU", "AdhocLobby"};
+char MAIN_CHEAT_LANGUAGES[6][8] = {"English", "French", "German", "Italian", "Spanish", "Dutch"};
 char* MAIN_CHEAT_TEXT = "";
 int SELECTED_CHEAT = 0;
+int LOCKED_CHEAT_SCREEN = 1;
+int LOCKED_CHEAT_SCREEN_INFRA = 1;
+int LOCKED_CHEAT_SCREEN_ELSE = 0;
+char LanguageIDSettingSaveFile[2] = "";
+int LanguageIDSettingSaveFileInt = 0;
 
 void CHECK_CHEATS() {
   if (MAIN_CHEAT_TEXT[0] != '\0')
@@ -115,16 +126,42 @@ void CHECK_CHEATS() {
     MAIN_CHEAT_TEXT[0] = '\0';
   }
   char value[2];
+  char screen[27];
+  char language[8];
   for (int i=0; i < CHEAT_LENGTH; i++) {
     if (i == SELECTED_CHEAT)
       strcat(MAIN_CHEAT_TEXT, ">  ");
+
+    if (strcmp(MAIN_CHEATS_STRINGS[i], "Go to Screen - ") == 0) {
+      if (strcmp(MAIN_CHEAT_SCREEN[MAIN_CHEATS_VALUES[i]-1], "Infrastucture Menu") == 0 || strcmp(MAIN_CHEAT_SCREEN[MAIN_CHEATS_VALUES[i]-1], "Adhoc Menu") == 0) 
+      {
+        if (LOCKED_CHEAT_SCREEN_INFRA == 1) {
+          logPrintf("lock infrasctuture or adhoc");
+          strcat(MAIN_CHEAT_TEXT, "(Locked) ");
+        } 
+      }
+
+      else if (strcmp(MAIN_CHEATS_STRINGS[i], "Set Game Language to: ") != 0){
+        if (LOCKED_CHEAT_SCREEN == 1 || LOCKED_CHEAT_SCREEN_ELSE == 1) {
+          strcat(MAIN_CHEAT_TEXT, "(Locked) ");
+        }
+      }
+    }
     strcat(MAIN_CHEAT_TEXT, MAIN_CHEATS_STRINGS[i]);
-    //logPrintf("MAIN_CHEAT_TEXT: %s", MAIN_CHEAT_TEXT);
     if (MAIN_CHEATS_BOOLS[i] < 2)
       strcat(MAIN_CHEAT_TEXT, MAIN_CHEATS_BOOLS[i]?"ON":"OFF");
     else {
-      sprintf(value, "%d", MAIN_CHEATS_VALUES[i]);
-      strcat(MAIN_CHEAT_TEXT, value);
+      if (strcmp(MAIN_CHEATS_STRINGS[i], "Go to Screen - ") == 0) {
+        sprintf(screen, "%s", MAIN_CHEAT_SCREEN[MAIN_CHEATS_VALUES[i]-1]);
+        strcat(MAIN_CHEAT_TEXT, screen);
+      }
+      else if (strcmp(MAIN_CHEATS_STRINGS[i], "Set Game Language to: ") == 0) {
+        sprintf(language, "%s", MAIN_CHEAT_LANGUAGES[MAIN_CHEATS_VALUES[i]-1]);
+        strcat(MAIN_CHEAT_TEXT, language);
+      } else {
+        sprintf(value, "%d", MAIN_CHEATS_VALUES[i]);
+        strcat(MAIN_CHEAT_TEXT, value);
+      }
     }
 
     if (i < CHEAT_LENGTH-1)
@@ -137,7 +174,33 @@ void UPDATE_TEXT_EXPLORER() {
   NFS_Command_Patched("CloseMessageBox", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); // To Display Message Box with text
   CHECK_CHEATS();
   NFS_Command_Patched("DisplayMessageBox", 0, 0, 9, MAIN_TITLE, MAIN_CHEAT_TEXT, 0x31000000, 0, 0x32000000, 0x30000000, 0, 0, 0); // To Display Message Box with text, only works on menu
+}
 
+void GOTO_SCREEN_CHEAT() {
+  if (strcmp(MAIN_CHEAT_SCREEN[MAIN_CHEATS_VALUES[SELECTED_CHEAT]-1], "Infrastucture Menu") == 0) {
+    if (LOCKED_CHEAT_SCREEN_INFRA == 0)
+      NFS_Command("AIPNet_GoToScreen",0,0,1,"INTERNETMAINMENU",0,0,0,0,0,0,0,0);
+  }
+  else if (strcmp(MAIN_CHEAT_SCREEN[MAIN_CHEATS_VALUES[SELECTED_CHEAT]-1], "Adhoc Menu") == 0) {
+    if (LOCKED_CHEAT_SCREEN_INFRA == 0)
+      NFS_Command("AIPNet_GoToScreen",0,0,1,"Adhoc Menu",0,0,0,0,0,0,0,0);
+  }
+  else {
+    if (LOCKED_CHEAT_SCREEN == 0 && LOCKED_CHEAT_SCREEN_ELSE == 0)
+      NFS_Command("OpenScreen",0,"/_root",1,MAIN_CHEAT_SCREEN_INTERNAL[MAIN_CHEATS_VALUES[SELECTED_CHEAT]-1], 0,0,0,0,0,0,0,0);
+  }
+}
+
+void SET_LANG_TO_CHEAT() {
+  char LanguageChangeIDStr[2] = "";
+  sprintf(LanguageChangeIDStr, "%d", MAIN_CHEATS_VALUES[SELECTED_CHEAT]-1);
+  logPrintf("writing %s to %s", LanguageChangeIDStr, savefile);
+  SceUID ffd = sceIoOpen(savefile, PSP_O_TRUNC | PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND, 0777);
+  if (ffd >= 0) {
+    sceIoWrite(ffd, LanguageChangeIDStr, strlen(LanguageChangeIDStr));
+    sceIoClose(ffd);
+  }
+  NFS_Command_Patched("DisplayMessageBox", 0, 0, 9, "INFORMATION", "Restart Your Game to Apply Effects", "1", 0, "1", "0", "$I_OK", 0, 0); // To Display Message Box with text, only works on menu
 }
 
 void DOWN_CHEAT_EXPLORER() {
@@ -157,12 +220,29 @@ void CROSS_CHEAT_EXPLORER() {
     UPDATE_TEXT_EXPLORER();  
   }
 
+  if (strcmp(MAIN_CHEATS_STRINGS[SELECTED_CHEAT], "Go to Screen - ") == 0) {
+    GOTO_SCREEN_CHEAT();
+  }
+}
+
+void CIRCLE_CHEAT_EXPLORER() {
+  if (strcmp(MAIN_CHEATS_STRINGS[SELECTED_CHEAT], "Set Game Language to: ") == 0) {
+    SET_LANG_TO_CHEAT();
+  }
 }
 
 void RIGHT_CHEAT_EXPLORER() {
-  if (MAIN_CHEATS_VALUES[SELECTED_CHEAT] > -1 && MAIN_CHEATS_VALUES[SELECTED_CHEAT] < 5) {
-    MAIN_CHEATS_VALUES[SELECTED_CHEAT] += 1;
-    UPDATE_TEXT_EXPLORER();
+  if (strcmp(MAIN_CHEATS_STRINGS[SELECTED_CHEAT], "Go to Screen - ") == 0 || strcmp(MAIN_CHEATS_STRINGS[SELECTED_CHEAT], "Set Game Language to: ") == 0) {
+    if (MAIN_CHEATS_VALUES[SELECTED_CHEAT] < 6) {
+      MAIN_CHEATS_VALUES[SELECTED_CHEAT] += 1;
+      UPDATE_TEXT_EXPLORER();
+    }
+  }
+  else {
+    if (MAIN_CHEATS_VALUES[SELECTED_CHEAT] > -1 && MAIN_CHEATS_VALUES[SELECTED_CHEAT] < 5) {
+      MAIN_CHEATS_VALUES[SELECTED_CHEAT] += 1;
+      UPDATE_TEXT_EXPLORER();
+    }
   }
 
 }
@@ -174,6 +254,14 @@ void LEFT_CHEAT_EXPLORER() {
   }
 }
 
+void HACK_CHEATS() {
+  // Nothing for now...
+}
+
+int (*FUN_00051f9c)(int param_1, char* param_2, int param_3, int param_4);
+int (*FUN_00094180)(char* param_1, int param_2, int param_3);
+
+
 SceInt64 sceKernelGetSystemTimeWidePatched(void) { // Game Loop
   // Calculations for FPS
   //SceInt64 cur_micros = sceKernelGetSystemTimeWide();
@@ -183,6 +271,7 @@ SceInt64 sceKernelGetSystemTimeWidePatched(void) { // Game Loop
   //  fps = (frames / (double)delta_micros) * 1000000.0f;
   //  frames = 0;
   //} frames++;
+  HACK_CHEATS();
 
   sceCtrlPeekBufferPositive(&pad, 1);
 
@@ -204,6 +293,10 @@ SceInt64 sceKernelGetSystemTimeWidePatched(void) { // Game Loop
         if (SELECTED_CHEAT+1 < CHEAT_LENGTH) {
           DOWN_CHEAT_EXPLORER();
         }
+      }
+
+      if ((pad.Buttons & PSP_CTRL_CIRCLE) && CURR_BUTTONS != OLD_BUTTONS) { // Pressed Down
+          CIRCLE_CHEAT_EXPLORER();
       }
 
       if ((pad.Buttons & PSP_CTRL_UP) && CURR_BUTTONS != OLD_BUTTONS) { // Pressed Up
@@ -244,41 +337,66 @@ SceInt64 sceKernelGetSystemTimeWidePatched(void) { // Game Loop
 }
 
 void NFS_Command_Patched(char* command,int param_2,char* param_3,int param_4, char* title, char* text, u32 param_7,u32 param_8, u32 param_9, u32 param_10, u32 param_11, u32 param_12, u32 param_13) { // Can use "DisplayMessageBox" and "CloseMessageBox" for param_1, param_5: title, param_6: text, still to discover the rest
+  //NFS_Command("OpenScreen",0,"/_root",1,"MainMenu", 0,0,0,0,0,0,0,0); // Opens NFS's Main Menu
+  if (strcmp(command, "OpenScreen") == 0) {
+    if (strcmp(title, "MainMenu") == 0) {
+      if (LOCKED_CHEAT_SCREEN == 1) LOCKED_CHEAT_SCREEN = 0;
+      if (LOCKED_CHEAT_SCREEN_INFRA == 0) LOCKED_CHEAT_SCREEN_INFRA = 1;
+      if (LOCKED_CHEAT_SCREEN_ELSE == 1) LOCKED_CHEAT_SCREEN_ELSE = 0;
+    }
+  }
+
+  if (strcmp(command, "AIPNet_GoToScreen") == 0) {
+    if (strcmp(title, "AdhocLobby") == 0) {
+      if (LOCKED_CHEAT_SCREEN_INFRA == 1) LOCKED_CHEAT_SCREEN_INFRA = 0;
+      if (LOCKED_CHEAT_SCREEN_ELSE == 0) LOCKED_CHEAT_SCREEN_ELSE = 1;
+    }
+
+  }
   NFS_Command(command, param_2, param_3, param_4, title, text, param_7, param_8, param_9, param_10, param_11, param_12, param_13);
   //Example Code:
   //NFS_Command("DisplayMessageBox", 0, 0, 9, 0, "Welcome to CheatDeviceOwnTheCity!", 0, 0, 0, 0, 0, 0, 0); // Close Message Box
   //logPrintf("command: %s\nparam_2: %d\nparam_3: %s\nparam_4: %d\nparam_5: %s\nparam_7: %x\nparam_8: %x\nparam_9: %x\n", command, param_2, param_3, param_4, param_5, param_7, param_8, param_9);
 }
 
-void NFS_Print2_Patched(int param_1, char* param_2, char* param_3) {
-  NFS_Print2(param_1, param_2, param_3);
-  //NFS_Print2(param_1, param_2, "4");
-  //logPrintf("param_1: %p", param_1);
+void NFS_Print3_Patched(char* string) {
+  //char pointer[32];
+  //sprintf(pointer, "%p", param_1-0x08800000);
+  NFS_Print3(string);
 }
 
 void NFS_Print_Patched(int param_1, char* param_2) { // Print Custom Message, still to discover param_1
   NFS_Print(param_1, param_2);
+}
 
-  /*
-  Example Code:
+void GetGameLanguageIDPatched(int LanguageNumber) {
+  GetGameLanguageID(LanguageIDSettingSaveFileInt);
+}
 
-  if (strcmp(param_2, "M_Laps") == 0) { // if current print text == "Laps", display our text
-    //Tweak x, y:
-    *(u32*) (param_1 + 0x28) = 0x42c80000; // x, 100.0
-    *(u32*) (param_1 + 0x2C) = 0x43480000; // y, 200.0
-    NFS_Print(param_1, "Custom Text Here"); // Print Text
-  } else {
-    NFS_Print(param_1, param_2);
-  }
-  */
+void LoadLanguagePatched(int *param_1, int LanguageID) {
+  LoadLanguage(param_1, 1000+LanguageIDSettingSaveFileInt);
 }
 
 
 void PatchNFSC(u32 text_addr) {
+
+  SceIoStat info;
+	sceIoGetstat(savefile, &info);
+  SceUID fd = sceIoOpen(savefile, PSP_O_RDONLY, 0777);
+  if (fd >= 0) {
+    sceIoRead(fd, &LanguageIDSettingSaveFile, (int)info.st_size);
+    LanguageIDSettingSaveFileInt = atoi(LanguageIDSettingSaveFile);
+    sceIoClose(fd);
+  }
+
+  FUN_00051f9c = (void*)(text_addr + 0x00051f9c);
+  FUN_00094180 = (void*)(text_addr + 0x00094180);
   sprintf(MAIN_TITLE, "CheatDeviceOTC %0.2f Made By MicSuit", PLG_VER);
   HIJACK_FUNCTION(text_addr + 0x00271834, NFS_Command_Patched, NFS_Command); 
   HIJACK_FUNCTION(text_addr + 0x00168ae8, NFS_Print_Patched, NFS_Print);
-  HIJACK_FUNCTION(text_addr + 0x00096db0, NFS_Print2_Patched, NFS_Print2);
+  HIJACK_FUNCTION(text_addr + 0x0009fc8c, NFS_Print3_Patched, NFS_Print3);
+  HIJACK_FUNCTION(text_addr + 0x0009fa4c, GetGameLanguageIDPatched, GetGameLanguageID);
+  HIJACK_FUNCTION(text_addr + 0x002ea46c, LoadLanguagePatched, LoadLanguage);
 
   MAKE_CALL(text_addr + 0x001df474, sceKernelGetSystemTimeWidePatched); // Loop
 }
@@ -293,7 +411,6 @@ int patch(u32 text_addr) {
 
 
 static void CheckModules() { // PPSSPP
-  logfile = "ms0:/PSP/PLUGINS/CheatDeviceOwnTheCity/log.txt";
   sceIoRemove(logfile); // Log Things...
   SceUID modules[10];
   int count = 0;
@@ -326,7 +443,6 @@ static void CheckModules() { // PPSSPP
 }
 
 int OnModuleStart(SceModule2 *mod) { // PSP
-  logfile = "ms0:/seplugins/log.txt";
   sceIoRemove(logfile); // Log Things...
   char *modname = mod->modname;
   logPrintf("Modname: %s", modname);
