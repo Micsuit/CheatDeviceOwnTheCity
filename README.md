@@ -1,6 +1,8 @@
 # CheatDeviceOwnTheCity
 A **Cheat Device** (still in progress) made for *Need For Speed: Own The City*. Only works on US Version v1.00 (**ULUS10114**).
 
+**[NOTE]: ONLY WORKS ON PPSSPP, IT CRASHES ON A REAL PSP OR ADRENALINE (PSVITA)**
+
 To open the cheat, press **Square + L-Trigger**.
 
 For now this is what you can do with it:
