@@ -1,5 +1,5 @@
 /*
-Cheat Device Own The City 0.12, Made by MicSuit
+Cheat Device Own The City 0.13, Made by MicSuit
 ONLY WORKS ON NFSC OTC US v1.00!!!
 Things To Do:
   - Make the cheats
