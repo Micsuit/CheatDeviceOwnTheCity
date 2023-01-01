@@ -1,5 +1,5 @@
 # CheatDeviceOwnTheCity
-A **Cheat Device** (still in progress) made for *Need For Speed: Own The City*. Only works on US Version v1.00 (**ULUS10114**).
+A **Cheat Device** (still in progress) made for *Need For Speed Carbon: Own The City*. Only works on US Version v1.00 (**ULUS10114**).
 
 **CheatDevice Own The City v0.13 Changelog**
 
